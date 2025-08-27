@@ -72,6 +72,7 @@ This code and content is released under the [GNU AGPL v3](https://github.com/aze
 #include "ScriptedGossip.h"
 #include "ScriptMgr.h"
 #include "SpellMgr.h"
+#include "Item.h"
 
 static bool BFEnableModule;
 static bool BFAnnounceModule;
@@ -217,14 +218,13 @@ public:
         return randMsg.c_str();
     }
 
-    // bool OnGossipSelect(Player* player, Creature* creature, uint32 /*uiSender*/, uint32 /* uiAction */) override
-    bool OnGossipHello(Player* player, Creature* creature)
+    // Buff player function - used by both NPC and item
+    static void BuffPlayer(Player* player)
     {
         if (!BFEnableModule)
-            return false;
+            return;
 
         // Who are we dealing with?
-        std::string CreatureWhisper = "Init";
         std::string PlayerName = player->GetName();
 
         // Store Buff IDs
@@ -239,7 +239,7 @@ public:
             player->RemoveAura(15007);
             std::ostringstream res;
             res << "The aura of death has been lifted from you " << PlayerName << ". Watch yourself out there!";
-            creature->Whisper(res.str().c_str(), LANG_UNIVERSAL, player);
+            ChatHandler(player->GetSession()).SendSysMessage(res.str().c_str());
         }
 
         // Are we buffing based on level
@@ -258,6 +258,19 @@ public:
             for (std::vector<uint32>::const_iterator itr = vecBuffs.begin(); itr != vecBuffs.end(); itr++)
                 player->CastSpell(player, *itr, true);
         }
+    }
+
+    // bool OnGossipSelect(Player* player, Creature* creature, uint32 /*uiSender*/, uint32 /* uiAction */) override
+    bool OnGossipHello(Player* player, Creature* creature)
+    {
+        if (!BFEnableModule)
+            return false;
+
+        // Who are we dealing with?
+        std::string CreatureWhisper = "Init";
+        std::string PlayerName = player->GetName();
+
+        BuffPlayer(player);
 
         // Choose and speak a random phrase to the player
         // Phrases are stored in the config file
@@ -321,9 +334,30 @@ public:
     }
 };
 
+class buff_item : public ItemScript
+{
+public:
+    buff_item() : ItemScript("buff_item") { }
+
+    bool OnUse(Player* player, Item* item, const SpellCastTargets& /*targets*/) override
+    {
+        if (!BFEnableModule)
+            return false;
+
+        if (item->GetEntry() == 52019)
+        {
+            buff_npc::BuffPlayer(player);
+            return true; // Item used successfully
+        }
+
+        return false; // Default handling
+    }
+};
+
 void AddNPCBufferScripts()
 {
     new BufferConfig();
     new BufferAnnounce();
     new buff_npc();
+    new buff_item();
 }
